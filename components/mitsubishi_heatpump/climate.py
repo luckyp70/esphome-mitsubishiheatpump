@@ -73,11 +73,15 @@ CONFIG_SCHEMA = climate.climate_schema().extend(
         cv.Optional(CONF_REMOTE_PING_TIMEOUT): cv.positive_int,
         cv.Optional(CONF_RX_PIN): cv.positive_int,
         cv.Optional(CONF_TX_PIN): cv.positive_int,
+        # If polling interval is greater than 9 seconds, the HeatPump library
+        # reconnects, but doesn't then follow up with our data request.
         cv.Optional(CONF_UPDATE_INTERVAL, default="500ms"): cv.All(
             cv.update_interval, cv.Range(max=cv.TimePeriod(milliseconds=9000))
         ),
-        cv.Optional(CONF_HORIZONTAL_SWING_SELECT): SELECT_SCHEMA,
-        cv.Optional(CONF_VERTICAL_SWING_SELECT): SELECT_SCHEMA,
+       # Add selects for vertical and horizontal vane positions
+       cv.Optional(CONF_HORIZONTAL_SWING_SELECT): SELECT_SCHEMA,
+       cv.Optional(CONF_VERTICAL_SWING_SELECT): SELECT_SCHEMA,
+        # Optionally override the supported ClimateTraits.
         cv.Optional(CONF_SUPPORTS, default={}): cv.Schema(
             {
                 cv.Optional(CONF_MODE, default=DEFAULT_CLIMATE_MODES):
@@ -90,6 +94,7 @@ CONFIG_SCHEMA = climate.climate_schema().extend(
         ),
     }
 ).extend(cv.COMPONENT_SCHEMA)
+
 
 @coroutine
 def to_code(config):

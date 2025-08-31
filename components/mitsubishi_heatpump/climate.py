@@ -63,7 +63,13 @@ SELECT_SCHEMA = select.SELECT_SCHEMA.extend(
     {cv.GenerateID(CONF_ID): cv.declare_id(MitsubishiACSelect)}
 )
 
-CONFIG_SCHEMA = climate.CLIMATE_SCHEMA.extend(
+CONFIG_SCHEMA = climate.climate_schema(
+    supports_current_temperature=True,
+    supports_action=True,
+    supports_mode=True,
+    supports_fan_mode=True,
+    supports_swing_mode=True,
+).extend(
     {
         cv.GenerateID(): cv.declare_id(MitsubishiHeatPump),
         cv.Optional(CONF_HARDWARE_UART, default="UART0"): valid_uart,
@@ -73,15 +79,11 @@ CONFIG_SCHEMA = climate.CLIMATE_SCHEMA.extend(
         cv.Optional(CONF_REMOTE_PING_TIMEOUT): cv.positive_int,
         cv.Optional(CONF_RX_PIN): cv.positive_int,
         cv.Optional(CONF_TX_PIN): cv.positive_int,
-        # If polling interval is greater than 9 seconds, the HeatPump library
-        # reconnects, but doesn't then follow up with our data request.
         cv.Optional(CONF_UPDATE_INTERVAL, default="500ms"): cv.All(
             cv.update_interval, cv.Range(max=cv.TimePeriod(milliseconds=9000))
         ),
-       # Add selects for vertical and horizontal vane positions
-       cv.Optional(CONF_HORIZONTAL_SWING_SELECT): SELECT_SCHEMA,
-       cv.Optional(CONF_VERTICAL_SWING_SELECT): SELECT_SCHEMA,
-        # Optionally override the supported ClimateTraits.
+        cv.Optional(CONF_HORIZONTAL_SWING_SELECT): SELECT_SCHEMA,
+        cv.Optional(CONF_VERTICAL_SWING_SELECT): SELECT_SCHEMA,
         cv.Optional(CONF_SUPPORTS, default={}): cv.Schema(
             {
                 cv.Optional(CONF_MODE, default=DEFAULT_CLIMATE_MODES):

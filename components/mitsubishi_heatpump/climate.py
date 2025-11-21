@@ -11,11 +11,11 @@ from esphome.const import (
     CONF_UPDATE_INTERVAL,
     CONF_MODE,
     CONF_FAN_MODE,
-    CONF_SWING_MODE,
-    PLATFORM_ESP8266
+    CONF_SWING_MODE
 )
-from esphome.core import CORE, coroutine
+from esphome.core import CORE
 
+CODEOWNERS = ["@geoffdavis"]
 AUTO_LOAD = ["climate", "select"]
 
 CONF_SUPPORTS = "supports"
@@ -40,11 +40,12 @@ CONF_REMOTE_OPERATING_TIMEOUT = "remote_temperature_operating_timeout_minutes"
 CONF_REMOTE_IDLE_TIMEOUT = "remote_temperature_idle_timeout_minutes"
 CONF_REMOTE_PING_TIMEOUT = "remote_temperature_ping_timeout_minutes"
 
-MitsubishiHeatPump = cg.global_ns.class_(
+mitsubishi_heatpump_ns = cg.esphome_ns.namespace("mitsubishi_heatpump")
+MitsubishiHeatPump = mitsubishi_heatpump_ns.class_(
     "MitsubishiHeatPump", climate.Climate, cg.PollingComponent
 )
 
-MitsubishiACSelect = cg.global_ns.class_(
+MitsubishiACSelect = mitsubishi_heatpump_ns.class_(
     "MitsubishiACSelect", select.Select, cg.Component
 )
 
@@ -59,11 +60,9 @@ def valid_uart(uart):
     return cv.one_of(*uarts, upper=True)(uart)
 
 
-SELECT_SCHEMA = select.SELECT_SCHEMA.extend(
-    {cv.GenerateID(CONF_ID): cv.declare_id(MitsubishiACSelect)}
-)
+SELECT_SCHEMA = select.select_schema(MitsubishiACSelect)
 
-CONFIG_SCHEMA = climate.climate_schema(MitsubishiHeatPump).extend(
+CONFIG_SCHEMA = climate.CLIMATE_SCHEMA.extend(
     {
         cv.GenerateID(): cv.declare_id(MitsubishiHeatPump),
         cv.Optional(CONF_HARDWARE_UART, default="UART0"): valid_uart,
@@ -78,9 +77,9 @@ CONFIG_SCHEMA = climate.climate_schema(MitsubishiHeatPump).extend(
         cv.Optional(CONF_UPDATE_INTERVAL, default="500ms"): cv.All(
             cv.update_interval, cv.Range(max=cv.TimePeriod(milliseconds=9000))
         ),
-       # Add selects for vertical and horizontal vane positions
-       cv.Optional(CONF_HORIZONTAL_SWING_SELECT): SELECT_SCHEMA,
-       cv.Optional(CONF_VERTICAL_SWING_SELECT): SELECT_SCHEMA,
+        # Add selects for vertical and horizontal vane positions
+        cv.Optional(CONF_HORIZONTAL_SWING_SELECT): SELECT_SCHEMA,
+        cv.Optional(CONF_VERTICAL_SWING_SELECT): SELECT_SCHEMA,
         # Optionally override the supported ClimateTraits.
         cv.Optional(CONF_SUPPORTS, default={}): cv.Schema(
             {
@@ -95,11 +94,25 @@ CONFIG_SCHEMA = climate.climate_schema(MitsubishiHeatPump).extend(
     }
 ).extend(cv.COMPONENT_SCHEMA)
 
+async def to_code(config):
+    var = cg.new_Pvariable(config[CONF_ID])
+    await cg.register_component(var, config)
+    await climate.register_climate(var, config)
 
-@coroutine
-def to_code(config):
-    serial = HARDWARE_UART_TO_SERIAL[PLATFORM_ESP8266][config[CONF_HARDWARE_UART]]
-    var = cg.new_Pvariable(config[CONF_ID], cg.RawExpression(f"&{serial}"))
+    # Set hardware UART
+    if CORE.is_esp8266:
+        cg.add_library("ESP8266", None, None)
+        if config[CONF_HARDWARE_UART] == "UART0":
+            cg.add(var.set_hw_serial(cg.RawExpression("&Serial")))
+        elif config[CONF_HARDWARE_UART] == "UART1":
+            cg.add(var.set_hw_serial(cg.RawExpression("&Serial1")))
+    elif CORE.is_esp32:
+        if config[CONF_HARDWARE_UART] == "UART0":
+            cg.add(var.set_hw_serial(cg.RawExpression("&Serial")))
+        elif config[CONF_HARDWARE_UART] == "UART1":
+            cg.add(var.set_hw_serial(cg.RawExpression("&Serial1")))
+        elif config[CONF_HARDWARE_UART] == "UART2":
+            cg.add(var.set_hw_serial(cg.RawExpression("&Serial2")))
 
     if CONF_BAUD_RATE in config:
         cg.add(var.set_baud_rate(config[CONF_BAUD_RATE]))
@@ -119,7 +132,6 @@ def to_code(config):
     if CONF_REMOTE_PING_TIMEOUT in config:
         cg.add(var.set_remote_ping_timeout_minutes(config[CONF_REMOTE_PING_TIMEOUT]))
 
-
     supports = config[CONF_SUPPORTS]
     traits = var.config_traits()
 
@@ -138,20 +150,18 @@ def to_code(config):
 
     if CONF_HORIZONTAL_SWING_SELECT in config:
         conf = config[CONF_HORIZONTAL_SWING_SELECT]
-        swing_select = yield select.new_select(conf, options=HORIZONTAL_SWING_OPTIONS)
-        yield cg.register_component(swing_select, conf)
+        swing_select = cg.new_Pvariable(conf[CONF_ID])
+        await select.register_select(swing_select, conf, options=HORIZONTAL_SWING_OPTIONS)
         cg.add(var.set_horizontal_vane_select(swing_select))
 
     if CONF_VERTICAL_SWING_SELECT in config:
         conf = config[CONF_VERTICAL_SWING_SELECT]
-        swing_select = yield select.new_select(conf, options=VERTICAL_SWING_OPTIONS)
-        yield cg.register_component(swing_select, conf)
+        swing_select = cg.new_Pvariable(conf[CONF_ID])
+        await select.register_select(swing_select, conf, options=VERTICAL_SWING_OPTIONS)
         cg.add(var.set_vertical_vane_select(swing_select))
 
-    yield cg.register_component(var, config)
-    yield climate.register_climate(var, config)
     cg.add_library(
         name="HeatPump",
-        repository="https://github.com/SwiCago/HeatPump#5d1e146771d2f458907a855bf9d5d4b9bf5ff033",
-        version=None, # this appears to be ignored?
+        repository="https://github.com/SwiCago/HeatPump",
+        version="5d1e146771d2f458907a855bf9d5d4b9bf5ff033",
     )

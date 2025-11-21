@@ -97,28 +97,36 @@ CONFIG_SCHEMA = climate.climate_schema(
 
 
 async def to_code(config):
-    var = cg.new_Pvariable(config[CONF_ID])
-    await cg.register_component(var, config)
-    await climate.register_climate(var, config)
-
-    # Set hardware UART
+    # Determine which serial port to use
+    serial_port = None
     if CORE.is_esp8266:
         cg.add_library("ESP8266", None, None)
         if config[CONF_HARDWARE_UART] == "UART0":
-            cg.add(var.set_hw_serial(cg.RawExpression("&Serial")))
+            serial_port = "&Serial"
         elif config[CONF_HARDWARE_UART] == "UART1":
-            cg.add(var.set_hw_serial(cg.RawExpression("&Serial1")))
+            serial_port = "&Serial1"
     elif CORE.is_esp32:
         if config[CONF_HARDWARE_UART] == "UART0":
-            cg.add(var.set_hw_serial(cg.RawExpression("&Serial")))
+            serial_port = "&Serial"
         elif config[CONF_HARDWARE_UART] == "UART1":
-            cg.add(var.set_hw_serial(cg.RawExpression("&Serial1")))
+            serial_port = "&Serial1"
         elif config[CONF_HARDWARE_UART] == "UART2":
-            cg.add(var.set_hw_serial(cg.RawExpression("&Serial2")))
+            serial_port = "&Serial2"
+    
+    # Get baud rate, default to 2400 (standard for Mitsubishi heat pumps)
+    baud_rate = config.get(CONF_BAUD_RATE, 2400)
+    
+    # Create the component with the required constructor arguments
+    var = cg.new_Pvariable(
+        config[CONF_ID],
+        cg.RawExpression(serial_port),
+        baud_rate
+    )
+    
+    await cg.register_component(var, config)
+    await climate.register_climate(var, config)
 
-    if CONF_BAUD_RATE in config:
-        cg.add(var.set_baud_rate(config[CONF_BAUD_RATE]))
-
+    # The constructor handles serial port and baud rate, but we can still set RX/TX pins if provided
     if CONF_RX_PIN in config:
         cg.add(var.set_rx_pin(config[CONF_RX_PIN]))
 

@@ -39,12 +39,11 @@ CONF_REMOTE_OPERATING_TIMEOUT = "remote_temperature_operating_timeout_minutes"
 CONF_REMOTE_IDLE_TIMEOUT = "remote_temperature_idle_timeout_minutes"
 CONF_REMOTE_PING_TIMEOUT = "remote_temperature_ping_timeout_minutes"
 
-mitsubishi_heatpump_ns = cg.esphome_ns.namespace("mitsubishi_heatpump")
-MitsubishiHeatPump = mitsubishi_heatpump_ns.class_(
+MitsubishiHeatPump = cg.global_ns.class_(
     "MitsubishiHeatPump", climate.Climate, cg.PollingComponent
 )
 
-MitsubishiACSelect = mitsubishi_heatpump_ns.class_(
+MitsubishiACSelect = cg.global_ns.class_(
     "MitsubishiACSelect", select.Select, cg.Component
 )
 
